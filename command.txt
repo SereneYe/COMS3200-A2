@@ -1,0 +1,15 @@
+python3 mchatserver.py configfile_02.txt
+python3 mchatclient.py 6666 Alice
+python3 mchatclient.py 6666 Bob
+python3 mchatclient.py 6666 Charlie
+python3 mchatclient.py 6666 Dane
+python3 mchatclient.py 6666 Emily
+python3 mchatclient.py 6666 Frank
+
+python3 mchatclient.py 6665 Alice
+python3 mchatclient.py 6665 Bob
+python3 mchatclient.py 6665 Charlie
+python3 mchatclient.py 6665 Dane
+python3 mchatclient.py 6665 Emily
+python3 mchatclient.py 6665 Frank
+
