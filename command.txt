@@ -12,4 +12,5 @@ python3 mchatclient.py 6665 Charlie
 python3 mchatclient.py 6665 Dane
 python3 mchatclient.py 6665 Emily
 python3 mchatclient.py 6665 Frank
+python3 mchatclient.py 6665 George
 

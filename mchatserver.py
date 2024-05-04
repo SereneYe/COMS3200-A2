@@ -165,7 +165,9 @@ def send_client(client, channel, msg) -> None:
     else:
         # if muted, send mute message to the client
         if client.muted:
-            pass
+            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_time} seconds."
+            client.connection.send(mute_message.encode())
+            return
 
         # if not muted, process the file sending
         else:
@@ -237,7 +239,10 @@ def whisper_client(client, channel, msg) -> None:
     else:
         # if muted, send mute message to the client
         if client.muted:
-            pass
+            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_time} seconds."
+            client.connection.send(mute_message.encode())
+            return
+
         else:
             # validate the command structure
             args = msg.split()
@@ -262,6 +267,7 @@ def whisper_client(client, channel, msg) -> None:
             else:  # if no break occurred, announce error
                 error_message = f"[Server message ({time.strftime('%H:%M:%S')})] {target_username} is not here."
                 client.connection.send(error_message.encode())
+
 
 def switch_channel(client, channel, msg, channels) -> None:
     """
@@ -325,7 +331,6 @@ def switch_channel(client, channel, msg, channels) -> None:
         position_client(target_channel, client.connection, client.username, client)
 
 
-
 def broadcast_in_channel(client, channel, msg) -> None:
     """
     Broadcast a message to all clients in the channel.
@@ -378,7 +383,6 @@ def client_handler(client, channel, channels) -> None:
                 whisper_client(client, channel, msg)
             elif msg.startswith("/switch"):
                 switch_channel(client, channel, msg, channels)
-                break
 
             # if not a command, broadcast message to all clients in the channel
             else:
@@ -613,11 +617,25 @@ def empty(command, channels) -> None:
     """
     # Write your code here...
     # validate the command structure
+    args = command.split()
+    if len(args) != 2:
+        print(
+            f"[Server message ({time.strftime('%H:%M:%S')})] Invalid empty command structure. Usage: /empty <channel_name>")
+        return
+
+    channel_name = args[1]
 
     # check if the channel exists in the server
+    if channel_name not in channels:
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] {channel_name} does not exist.")
+        return
 
     # if the channel exists, close connections of all clients in the channel
-    pass
+    while channels[channel_name].clients:
+        client = channels[channel_name].clients.pop()
+        client.connection.close()
+
+    print(f"[Server message ({time.strftime('%H:%M:%S')})] {channel_name} has been emptied")
 
 
 def mute_user(command, channels) -> None:
@@ -632,17 +650,44 @@ def mute_user(command, channels) -> None:
     """
     # Write your code here...
     # validate the command structure
+    args = command.split()
+    if len(args) != 4:
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] Invalid mute command structure. "
+              f"Usage: /mute <channel_name> <username> <time>")
+        return
+
+    channel_name, username, mute_time = args[1], args[2], args[3]
 
     # check if the mute time is valid
+    if not mute_time.isdigit() or int(mute_time) <= 0:
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] Invalid mute time.")
+        return
 
     # check if the channel exists in the server
+    if channel_name not in channels:
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] {channel_name} does not exist.")
+        return
 
     # if the channel exists, check if the user is in the channel
+    for client in channels[channel_name].clients:
+        # if user is in the channel, mute it and send messages to all clients
+        if client.username == username:
+            client.muted = True
+            client.mute_time = int(mute_time)
+            print(client.muted, client.mute_time)
 
-    # if user is in the channel, mute it and send messages to all clients
+            print(f"[Server message ({time.strftime('%H:%M:%S')})] Muted {username} for {mute_time} seconds.")
+            message = f"[Server message ({time.strftime('%H:%M:%S')})] You have been muted for {mute_time} seconds."
+            client.connection.send(message.encode())
+
+            message = f"[Server message ({time.strftime('%H:%M:%S')})] {username} has been muted for {mute_time} seconds."
+            for other_client in channels[channel_name].clients:
+                if other_client.username != username:
+                    other_client.connection.send(message.encode())
+            return
 
     # if user is not in the channel, print error message
-    pass
+    print(f"[Server message ({time.strftime('%H:%M:%S')})] {username} is not here.")
 
 
 def shutdown(channels) -> None:
