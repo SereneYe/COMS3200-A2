@@ -634,8 +634,7 @@ def empty(command, channels) -> None:
     # validate the command structure
     args = command.split()
     if len(args) != 2:
-        print(
-            f"[Server message ({time.strftime('%H:%M:%S')})] Invalid empty command structure. Usage: /empty <channel_name>")
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] Invalid empty command structure. Usage: /empty <channel_name>")
         return
 
     channel_name = args[1]
@@ -769,30 +768,32 @@ def check_inactive_clients(channels) -> None:
     """
     # Write your code here...
     # parse through all the clients in all the channels
-    current_time = time.time()
-    for channel in channels.values():
-        for client in list(channel.clients):
-            # if client is muted or in queue
-            if client.muted or client.in_queue:
-                continue
+    while True:
+        try:
+            for channel in channels.values():
+                for client in channel.clients:
+                    # if client is muted or in queue
+                    if client.muted or client.in_queue:
+                        continue
 
-            # check if client has exceeded their remaining time
-            if client.remaining_time <= 0:
-                message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} went AFK."
-                print(message)
+                    # check if client has exceeded their remaining time
+                    if client.remaining_time <= 0:
+                        message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} went AFK."
+                        print(message)
 
-                # broadcast the AFK message to all other clients in the channel
-                for other_client in channel.clients:
-                    if other_client != client:
-                        other_client.connection.send(message.encode())
+                        # broadcast the AFK message to all other clients in the channel
+                        broadcast_in_channel(client, channel, message)
 
-                # remove client from the channel and close their connection
-                channel.clients.remove(client)
-                client.connection.close()
+                        # remove client from the channel and close their connection
+                        channel.clients.remove(client)
+                        client.connection.close()
 
-            # if client is not muted, decrement their remaining time
-            else:
-                client.remaining_time -= 1
+                    # if client is not muted, decrement their remaining time
+                    else:
+                        client.remaining_time -= 10
+            time.sleep(0.99)
+        except EOFError:
+            continue
 
 
 
@@ -814,7 +815,6 @@ def handle_mute_durations(channels) -> None:
                         client.muted = False
                         client.mute_duration = 0
                     if client.muted and client.mute_duration > 0:
-                        print(client.muted, client.mute_duration)
                         client.mute_duration -= 1
             time.sleep(0.99)
         except EOFError:
