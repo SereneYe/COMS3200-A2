@@ -116,12 +116,21 @@ def output_thread(quitEvent, user):
             continue
         # Write your code here...
 
-        # add elif block to handle instructions from server
-        # NOTE: some commands such as quit is directly sent over to the server
-        # server processes the command and closes then confirms to quit by sending
-        # a code/ message to the client and exits itself. The block of code you're
-        # going to add here is supposed to handle the message/code sent by the server
-        # and close the client as well. similarly for switch, and send!
+        elif "You have successfully quit" in output or "You went AFK" in output or "You are kicked" in output:
+            print(output, flush=True)
+            user.soc.close()
+            quitEvent.set()
+
+        # elif "You sent" in output:
+        #     print(output, flush=True)
+
+        elif "You can now switching to" in output:
+            print(output, flush=True)
+            # Simulating that the client knows the port of the new channel
+            port = int(output.split()[-1])
+            user.soc.close()
+            user.connect(port)
+            user.send(user.get_username())
 
         else:
             print(output, flush=True)  # Send output to stdout

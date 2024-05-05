@@ -151,11 +151,17 @@ def quit_client(client, channel) -> None:
     else:
         # Write your code here...
         # remove client from the channel, close connection, and broadcast quit message to all clients.
-        channel.clients.remove(client)
-        print(
-            f"[Server message ({time.strftime('%H:%M:%S')})] User '{client.username}' has quit the channel '{channel.name}'")
-        quit_message_channel = f"[Server message ({time.strftime('%H:%M:%S')})] User '{client.username}' has quit the channel."
+        quit_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                        f"You have successfully quit the the channel '{channel.name}'.")
+        client.connection.send(quit_message.encode())
+
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] User '{client.username}' "
+              f"has quit the channel '{channel.name}'")
+
+        quit_message_channel = (f"User '{client.username}' has quit the channel.")
         broadcast_in_channel(client, channel, quit_message_channel)
+        client.connection.close()
+        channel.clients.remove(client)
 
 
 def send_client(client, channel, msg) -> None:
@@ -218,6 +224,7 @@ def send_client(client, channel, msg) -> None:
 
                     client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
                                            f"You sent '{file_path}' to '{target_username}'.".encode())
+
                     print(f"[Server message ({time.strftime('%H:%M:%S')})] "
                           f"'{client.username}' sent '{file_path}' to '{target_username}'.")
                     break
@@ -234,9 +241,9 @@ def list_clients(client, channels) -> None:
     for channel_name, channel in channels.items():
         current_capacity = len(channel.clients)
         in_queue = channel.queue.qsize()
-        channel_info = "Channel: {} Port: {} Capacity: {}/{} Queue: {}\n".format(channel_name, channel.port,
-                                                                                 current_capacity, channel.capacity,
-                                                                                 in_queue)
+        channel_info = ("Channel: {} Port: {} Capacity: {}/{} Queue: {}\n"
+                        .format(channel_name, channel.port,current_capacity, channel.capacity,in_queue))
+
         client.connection.send(channel_info.encode())
 
 
@@ -293,9 +300,10 @@ def switch_channel(client, channel, msg, channels) -> None:
     # validate the command structure
     args = msg.split()
     if len(args) != 2:
-        error_message = f"[Server message ({time.strftime('%H:%M:%S')})] Invalid switch command structure. Usage: /switch <channel_name>"
+        error_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                         f"Invalid switch command structure. Usage: /switch <channel_name>")
         client.connection.send(error_message.encode())
-        return
+        raise Exception(error_message)
 
     target_channel_name = args[1]
 
@@ -303,16 +311,17 @@ def switch_channel(client, channel, msg, channels) -> None:
     if target_channel_name not in channels:
         error_message = f"[Server message ({time.strftime('%H:%M:%S')})] {target_channel_name} does not exist"
         client.connection.send(error_message.encode())
-        return
+        raise Exception(error_message)
 
     target_channel = channels[target_channel_name]
 
     # check if there is a client with the same username in the new channel
     for existing_client in target_channel.clients:
         if existing_client.username == client.username:
-            error_message = f"[Server message ({time.strftime('%H:%M:%S')})] {target_channel_name} already has a user with username {client.username}"
+            error_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                             f"{target_channel_name} already has a user with username {client.username}")
             client.connection.send(error_message.encode())
-            return
+            raise Exception(error_message)
 
     # if all checks are correct, and client in queue
     if client.in_queue:
@@ -320,29 +329,44 @@ def switch_channel(client, channel, msg, channels) -> None:
         channel.queue = remove_item(channel.queue, client)
 
         # broadcast queue update message to all clients in the current channel
+        switch_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                          f"You can now switching to {target_channel.name} by the port {target_channel.port}")
+        client.connection.send(switch_message.encode())
+
         leave_message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} has left the channel"
         print(leave_message)
+
         queue_clients = list(channel.queue.queue)
         for i, client_in_queue in enumerate(queue_clients):
             update_message = (
                 f"[Server message ({time.strftime('%H:%M:%S')})] You are in the waiting queue and "
                 f"there are now {i} user(s) ahead of you.")
             client_in_queue.connection.send(update_message.encode())
-        # treat the client as a new client in the new channel
-        position_client(target_channel, client.connection, client.username, client)
 
-    # if all checks are correct, and client in channel
-    else:
+        client.connection.close()
+
+
+    # if all checks are correct, and client is in current channel
+    elif client in channel.clients:
         # remove client from current channel
         channel.clients.remove(client)
         # tell client to connect to new channel and close connection
+        switch_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                            f"You can now switching to {target_channel.name} by the port {target_channel.port}")
+        client.connection.send(switch_message.encode())
+
         leave_message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} has left the channel"
         print(leave_message)
-        leave_message_channel = f"[Server message ({time.strftime('%H:%M:%S')})] User '{client.username}' has left the channel."
+
+        leave_message_channel = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                 f"User '{client.username}' has left the channel.")
         broadcast_in_channel(client, channel, leave_message_channel)
 
-        # treat the client as a new client in the new channel
-        position_client(target_channel, client.connection, client.username, client)
+        client.connection.close()
+
+    else:
+        print("I don't know what should happen in this branch")
+        print(client.username,client.connection,client.mute_duration)
 
 
 def broadcast_in_channel(client, channel, msg) -> None:
@@ -357,7 +381,8 @@ def broadcast_in_channel(client, channel, msg) -> None:
 
     # if muted, send mute message to the client
     if client.muted:
-        mute_message = f'[Server message ({time.strftime("%H:%M:%S")})] You are currently muted for {client.mute_duration} seconds.'
+        mute_message = (f'[Server message ({time.strftime("%H:%M:%S")})] '
+                        f'You are currently muted for {client.mute_duration} seconds.')
         client.connection.send(mute_message.encode())
         return
 
@@ -397,6 +422,7 @@ def client_handler(client, channel, channels) -> None:
                 whisper_client(client, channel, msg)
             elif msg.startswith("/switch"):
                 switch_channel(client, channel, msg, channels)
+                break
 
             # if not a command, broadcast message to all clients in the channel
             else:
@@ -409,12 +435,15 @@ def client_handler(client, channel, channels) -> None:
             continue
         except OSError:
             break
+        except BrokenPipeError:
+            print("Connection to the client was lost.")
+            client.connection.close()
+            channel.clients.remove(client)
+            break
         except Exception as e:
             print(f"Error in client handler: {e}")
             # remove client from the channel, close connection
-            # Write your code here...
-
-            break
+            # Write your cod e here...
 
 
 def check_duplicate_username(username, channel, conn) -> bool:
@@ -455,13 +484,17 @@ def position_client(channel, conn, username, new_client) -> None:
         channel.clients.append(new_client)
 
         # Print message on both server and client side
-        server_message = f'️[Server message ({time.strftime("%H:%M:%S")})] {username} has joined the {channel.name} room.'
+        server_message = (f'️[Server message ({time.strftime("%H:%M:%S")})] '
+                          f'{username} has joined the {channel.name} room.')
         print(server_message)
-        client_message = f'[Server message ({time.strftime("%H:%M:%S")})] {username} has joined the channel.'
+
+        client_message = (f"{username} has joined the channel.")
+
         broadcast_in_channel(new_client, channel, client_message)
     else:
         # Send a server message to the client
-        waiting_room_message = f'[Server message ({time.strftime("%H:%M:%S")})] Welcome to the {channel.name} waiting room, {username}.'
+        waiting_room_message = (f'[Server message ({time.strftime("%H:%M:%S")})] '
+                                f'Welcome to the {channel.name} waiting room, {username}.')
         conn.send(waiting_room_message.encode())
 
         # put client in queue
@@ -561,8 +594,7 @@ def process_queue(channel) -> None:
                 channel.clients.append(new_client)
 
                 # Send join message to all clients in the channel
-                join_message = (f'[Server message ({time.strftime("%H:%M:%S")})] {new_client.username} has joined '
-                                f'the {channel.name} room.')
+                join_message = f'{new_client.username} has joined the {channel.name} room.'
                 broadcast_in_channel(new_client, channel, join_message)
 
                 # Update the queue messages for remaining clients in the queue
@@ -594,13 +626,14 @@ def kick_user(command, channels) -> None:
     # validate command structure
     args = command.split()
     if len(args) != 3:
-        print(f"[Server message ({time.strftime('%H:%M:%S')})] Invalid command, you should specify a channel and a user.")
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] "
+              f"Invalid command, you should specify a channel and a user.")
         return
     channel_name, username = args[1], args[2]
 
     # check if the channel exists in the dictionary
     if channel_name not in channels:
-        print("[Server message (%s)] '%s' does not exist." % (time.strftime('%H:%M:%S'), channel_name))
+        print(f"[Server message ({time.strftime('%H:%M:%S')})] {channel_name} does not exist." )
         return
 
     # if channel exists, check if the user is in the channel
@@ -609,17 +642,25 @@ def kick_user(command, channels) -> None:
     # if user is in the channel, kick the user
     for client in channel.clients:
         if client.username == username:
-            client.connection.close()
-            channel.clients.remove(client)
-            print("[Server message (%s)] Kicked '%s'." % (time.strftime('%H:%M:%S'), username))
             # Broadcast message to other clients
-            msg = "'%s' has left the channel." % username
-            broadcast_in_channel(client, channel, msg)
+            kick_broadcast_msg = f"{username} has left the channel."
+            broadcast_in_channel(client, channel, kick_broadcast_msg)
+            
+            client_kick_msg = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                   f"You are kicked from the channel '{channel_name}'.")
+
+            client.connection.send(client_kick_msg.encode())
+
+            print(f"[Server message ({time.strftime('%H:%M:%S')})] Kicked {username}.")
+
+            client.connection.close()
+            
+            channel.clients.remove(client)
             break
 
     # if user is not in the channel, print error message
     else:
-        print("[Server message (%s)] '%s' is not in '%s'." % (time.strftime('%H:%M:%S'), username, channel_name))
+        print(f"[Server message {time.strftime('%H:%M:%S')}] {username} is not in {channel_name}.")
 
 
 def empty(command, channels) -> None:
@@ -721,7 +762,7 @@ def shutdown(channels) -> None:
         for queued_client in channel.queue.queue:
             queued_client.connection.close()
 
-    print("[Server message (%s)] Server is shutting down..." % time.strftime('%H:%M:%S'))
+    print(f"[Server message {time.strftime('%H:%M:%S')}] Server is shutting down...")
 
     # end of code insertion, keep the os._exit(0) as it is
     os._exit(0)
@@ -778,23 +819,27 @@ def check_inactive_clients(channels) -> None:
 
                     # check if client has exceeded their remaining time
                     if client.remaining_time <= 0:
-                        message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} went AFK."
-                        print(message)
+                        if client.remaining_time <= 0:
+                            client_afk_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                                  f" You went AFK, connection closed...")
+
+                        broadcast_afk_message = (f"{client.username} went AFK.")
+                        print(broadcast_afk_message)
 
                         # broadcast the AFK message to all other clients in the channel
-                        broadcast_in_channel(client, channel, message)
+                        broadcast_in_channel(client, channel, broadcast_afk_message)
 
                         # remove client from the channel and close their connection
-                        channel.clients.remove(client)
                         client.connection.close()
+                        channel.clients.remove(client)
+
 
                     # if client is not muted, decrement their remaining time
                     else:
-                        client.remaining_time -= 10
+                        client.remaining_time -= 1
             time.sleep(0.99)
         except EOFError:
             continue
-
 
 
 def handle_mute_durations(channels) -> None:
