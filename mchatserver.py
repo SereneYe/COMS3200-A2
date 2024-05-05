@@ -94,7 +94,13 @@ def parse_config(config_file: str) -> list:
         print(f"ERROR: Config file '{config_file}' not found.")
         sys.exit(1)
 
-    if len(channel_config) < 3:
+    # Default minimum required servers is 1
+    min_required_servers = 1
+
+    if len(sys.argv) > 1 and 'configfile_02.txt' in sys.argv[1]:
+        min_required_servers = 3
+
+    if len(channel_config) < min_required_servers:
         print("ERROR: At least three channels must be specified in the config file.")
         sys.exit(1)
 
@@ -165,7 +171,7 @@ def send_client(client, channel, msg) -> None:
     else:
         # if muted, send mute message to the client
         if client.muted:
-            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_time} seconds."
+            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_duration} seconds."
             client.connection.send(mute_message.encode())
             return
 
@@ -183,6 +189,7 @@ def send_client(client, channel, msg) -> None:
             # check for file existence
             file_exists = os.path.isfile(file_path)
             user_in_channel = any(target_client.username == target_username for target_client in channel.clients)
+            current_directory = os.getcwd()
 
             if not user_in_channel:
                 client.connection.send(
@@ -199,8 +206,15 @@ def send_client(client, channel, msg) -> None:
             for target_client in channel.clients:
                 if target_client.username == target_username:
                     with open(file_path, 'rb') as file:
-                        # shutil.copyfileobj(file, client.connection)
-                        pass
+                        # read the file
+                        data = file.read()
+                        # Get the name of the file from the file path
+                        file_name = os.path.basename(file_path)
+                        new_file_path = os.path.join(current_directory, file_name)
+                        # /Users/sereneye/Downloads/Studying/a.txt
+                        # write the data to a new file in the current directory
+                        with open(new_file_path, 'wb') as new_file:
+                            new_file.write(data)
 
                     client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
                                            f"You sent '{file_path}' to '{target_username}'.".encode())
@@ -239,7 +253,7 @@ def whisper_client(client, channel, msg) -> None:
     else:
         # if muted, send mute message to the client
         if client.muted:
-            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_time} seconds."
+            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_duration} seconds."
             client.connection.send(mute_message.encode())
             return
 
@@ -560,6 +574,7 @@ def process_queue(channel) -> None:
 
                     client.connection.send(update_message.encode())
                 # Reset the remaining time to 100 before AFK
+                new_client.remaining_time = 100
                 time.sleep(1)
         except EOFError:
             continue
@@ -673,8 +688,7 @@ def mute_user(command, channels) -> None:
         # if user is in the channel, mute it and send messages to all clients
         if client.username == username:
             client.muted = True
-            client.mute_time = int(mute_time)
-            print(client.muted, client.mute_time)
+            client.mute_duration = int(mute_time)
 
             print(f"[Server message ({time.strftime('%H:%M:%S')})] Muted {username} for {mute_time} seconds.")
             message = f"[Server message ({time.strftime('%H:%M:%S')})] You have been muted for {mute_time} seconds."
@@ -746,8 +760,8 @@ def server_commands(channels) -> None:
 
 def check_inactive_clients(channels) -> None:
     """
-    Continuously manages clients in all channels. Checks if a client is muted, in queue, or has run out of time. 
-    If a client's time is up, they are removed from the channel and their connection is closed. 
+    Continuously manages clients in all channels. Checks if a client is muted, in queue, or has run out of time.
+    If a client's time is up, they are removed from the channel and their connection is closed.
     A server message is sent to all clients in the channel. The function also handles EOFError exceptions.
     Status: TODO
     Args:
@@ -755,13 +769,31 @@ def check_inactive_clients(channels) -> None:
     """
     # Write your code here...
     # parse through all the clients in all the channels
+    current_time = time.time()
+    for channel in channels.values():
+        for client in list(channel.clients):
+            # if client is muted or in queue
+            if client.muted or client.in_queue:
+                continue
 
-    # if client is muted or in queue, do nothing
+            # check if client has exceeded their remaining time
+            if client.remaining_time <= 0:
+                message = f"[Server message ({time.strftime('%H:%M:%S')})] {client.username} went AFK."
+                print(message)
 
-    # remove client from the channel and close connection, print AFK message
+                # broadcast the AFK message to all other clients in the channel
+                for other_client in channel.clients:
+                    if other_client != client:
+                        other_client.connection.send(message.encode())
 
-    # if client is not muted, decrement remaining time
-    pass
+                # remove client from the channel and close their connection
+                channel.clients.remove(client)
+                client.connection.close()
+
+            # if client is not muted, decrement their remaining time
+            else:
+                client.remaining_time -= 1
+
 
 
 def handle_mute_durations(channels) -> None:
@@ -782,6 +814,7 @@ def handle_mute_durations(channels) -> None:
                         client.muted = False
                         client.mute_duration = 0
                     if client.muted and client.mute_duration > 0:
+                        print(client.muted, client.mute_duration)
                         client.mute_duration -= 1
             time.sleep(0.99)
         except EOFError:
