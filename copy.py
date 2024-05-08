@@ -184,9 +184,9 @@ def client_handler(client, channel, channels) -> None:
     Manages client's mute status and remaining time. Handles client disconnection and exceptions during message processing.
     Status: TODO (check the "# Write your code here..." block in Exception)
     Args:
-        client (Client): The client to handle.
-        channel (Channel): The channel in which the client is.
+        client (Client): The client to han        channel (Channel): The channel in which the client is.
         channels (dict): A dictionary of all channels.
+dle.
     """
     while True:
         if client.kicked:

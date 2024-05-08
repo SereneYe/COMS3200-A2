@@ -177,7 +177,8 @@ def send_client(client, channel, msg) -> None:
     else:
         # if muted, send mute message to the client
         if client.muted:
-            mute_message = f"[Server message ({time.strftime('%H:%M:%S')})] You are still muted for {client.mute_duration} seconds."
+            mute_message = (f"[Server message ({time.strftime('%H:%M:%S')})] "
+                            f"You are still muted for {client.mute_duration} seconds.")
             client.connection.send(mute_message.encode())
             return
 
@@ -211,19 +212,26 @@ def send_client(client, channel, msg) -> None:
             # check if receiver is in the channel, and send the file
             for target_client in channel.clients:
                 if target_client.username == target_username:
+
                     with open(file_path, 'rb') as file:
-                        # read the file
-                        data = file.read()
                         # Get the name of the file from the file path
                         file_name = os.path.basename(file_path)
-                        new_file_path = os.path.join(current_directory, file_name)
-                        # /Users/sereneye/Downloads/Studying/a.txt
-                        # write the data to a new file in the current directory
-                        with open(new_file_path, 'wb') as new_file:
-                            new_file.write(data)
+                        # /send Alice /Users/sereneye/Downloads/Studying/a.txt
+
+                        client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                               f"You are sending '{file_name}' to '{target_username}'.".encode())
+                        target_client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                                      f"You are receiving '{file_name}' from {client.username}.".encode())
+
+                        file_data = file.readlines()
+                        file_string = b''.join(file_data)
+                        target_client.connection.send(file_string)
 
                     client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
-                                           f"You sent '{file_path}' to '{target_username}'.".encode())
+                                           f"You successfully sent '{file_name}' to '{target_username}'.".encode())
+
+                    target_client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
+                                                  f"You successfully received '{file_name}' from '{client.username}'.".encode())
 
                     print(f"[Server message ({time.strftime('%H:%M:%S')})] "
                           f"'{client.username}' sent '{file_path}' to '{target_username}'.")
@@ -435,15 +443,13 @@ def client_handler(client, channel, channels) -> None:
             continue
         except OSError:
             break
-        except BrokenPipeError:
-            print("Connection to the client was lost.")
-            client.connection.close()
-            channel.clients.remove(client)
-            break
         except Exception as e:
             print(f"Error in client handler: {e}")
             # remove client from the channel, close connection
             # Write your cod e here...
+            client.connection.close()
+            channel.clients.remove(client)
+            break
 
 
 def check_duplicate_username(username, channel, conn) -> bool:

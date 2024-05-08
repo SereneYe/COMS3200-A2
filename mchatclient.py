@@ -83,6 +83,7 @@ class User():
         """
         return self.username
 
+
 def input_thread(quitEvent, user):
     """
     The input thread for the client, constantly takes in user input
@@ -100,6 +101,7 @@ def input_thread(quitEvent, user):
         if not user.send(message):  # ConnectionResetError occured
             quitEvent.set()
 
+
 def output_thread(quitEvent, user):
     """
     The output thread handling responses from the server. Receives server
@@ -109,6 +111,10 @@ def output_thread(quitEvent, user):
         quitEvent (threading.Event): Event on which the user must exit.
         user (User): the user object used by this chatclient.
     """
+    is_receiving_file = False
+    file_data = b''
+    file_name = ''
+
     while not quitEvent.is_set():
         output = user.receive()
         if not output or output is None:  # Server has exited
@@ -121,8 +127,32 @@ def output_thread(quitEvent, user):
             user.soc.close()
             quitEvent.set()
 
-        # elif "You sent" in output:
-        #     print(output, flush=True)
+        elif is_receiving_file:
+            if "You successfully received" not in output:
+                if type(output) is str:
+                    file_data = bytes(output, 'utf-8')
+                else:
+                    file_data = output
+
+                print("11111", file_data, flush=True)
+                print(type(file_data), flush=True)
+            else:
+                is_receiving_file = False
+                with open(file_name, 'wb') as f:
+                    if isinstance(file_data, str):
+                        file_data = file_data.encode()
+                    f.write(file_data)
+                print(f"File {file_name} received and written.", flush=True)
+                file_data = b''
+                file_name = ''
+
+        elif "You are receiving" in output:
+            print("Receiving files", flush=True)
+            print(output, flush=True)
+            start = output.find("'")
+            end = output.find("'", start + 1)
+            file_name = output[start + 1:end]
+            is_receiving_file = True
 
         elif "You can now switching to" in output:
             print(output, flush=True)
@@ -134,6 +164,7 @@ def output_thread(quitEvent, user):
 
         else:
             print(output, flush=True)  # Send output to stdout
+
 
 def validate_input(port, username):
     """
