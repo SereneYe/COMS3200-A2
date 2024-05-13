@@ -127,6 +127,7 @@ def output_thread(quitEvent, user):
             user.soc.close()
             quitEvent.set()
 
+
         elif is_receiving_file:
             if "You successfully received" not in output:
                 if type(output) is str:
@@ -189,40 +190,44 @@ if __name__ == '__main__':
     Main function processing of the chatclient. Creates user object and
     threads and waits for them to finish.
     """
-    if len(sys.argv) != 3:
-        print("Usage: python mchatclient.py <port> <username>")
-        sys.exit(1)
-
-    port = sys.argv[1]
-    username = sys.argv[2]
-
-    port, username = validate_input(port, username)
-
-    # Create and connect the user
-    user = User(username)
     try:
-        user.connect(int(port))
-        if not user.send(user.get_username()):
-            sys.exit(1)  # ConnectionResetError happened
-    except:
-        sys.exit(1)
-    # Event for when user types /quit
-    quitEvent = threading.Event()
+        if len(sys.argv) != 3:
+            print("Usage: python mchatclient.py <port> <username>")
+            sys.exit(1)
 
-    # Initialize and begin reading and writing threads
-    inputThread = threading.Thread(
-        target=input_thread, args=(quitEvent, user,))
-    outputThread = threading.Thread(
-        target=output_thread, args=(quitEvent, user,))
-    inputThread.daemon = True
-    outputThread.daemon = True
-    try:
-        inputThread.start()
-        outputThread.start()
-    except:  # exit if threads can't be created
-        sys.exit(1)
+        port = sys.argv[1]
+        username = sys.argv[2]
 
-    # Wait for threads to complete before exiting the program
-    while not quitEvent.is_set():
-        continue
-    sys.exit(0)  # input thread is daemon and will exit itself
+        port, username = validate_input(port, username)
+
+        # Create and connect the user
+        user = User(username)
+        try:
+            user.connect(int(port))
+            if not user.send(user.get_username()):
+                sys.exit(1)  # ConnectionResetError happened
+        except:
+            sys.exit(1)
+        # Event for when user types /quit
+        quitEvent = threading.Event()
+
+        # Initialize and begin reading and writing threads
+        inputThread = threading.Thread(
+            target=input_thread, args=(quitEvent, user,))
+        outputThread = threading.Thread(
+            target=output_thread, args=(quitEvent, user,))
+        inputThread.daemon = True
+        outputThread.daemon = True
+        try:
+            inputThread.start()
+            outputThread.start()
+        except:  # exit if threads can't be created
+            sys.exit(1)
+
+        # Wait for threads to complete before exiting the program
+        while not quitEvent.is_set():
+            continue
+        sys.exit(0)  # input thread is daemon and will exit itself
+    except KeyboardInterrupt:
+        print("Crlt + C Pressed. Exiting...")
+        os._exit(0)

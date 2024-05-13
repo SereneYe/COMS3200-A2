@@ -97,7 +97,7 @@ def parse_config(config_file: str) -> list:
     # Default minimum required servers is 1
     min_required_servers = 1
 
-    if len(sys.argv) > 1 and 'configfile_02.txt' in sys.argv[1]:
+    if len(sys.argv) > 1 and 'configs2.txt' in sys.argv[1]:
         min_required_servers = 3
 
     if len(channel_config) < min_required_servers:
@@ -219,7 +219,7 @@ def send_client(client, channel, msg) -> None:
                         # /send Alice /Users/sereneye/Downloads/Studying/a.txt
 
                         client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
-                                               f"You are sending '{file_name}' to '{target_username}'.".encode())
+                                               f"You sent {file_name} to {target_username}.".encode())
                         target_client.connection.send(f"[Server message ({time.strftime('%H:%M:%S')})] "
                                                       f"You are receiving '{file_name}' from {client.username}.".encode())
 
@@ -234,7 +234,7 @@ def send_client(client, channel, msg) -> None:
                                                   f"You successfully received '{file_name}' from '{client.username}'.".encode())
 
                     print(f"[Server message ({time.strftime('%H:%M:%S')})] "
-                          f"'{client.username}' sent '{file_path}' to '{target_username}'.")
+                          f"{client.username} sent {file_path} to {target_username}.")
                     break
 
             return
@@ -396,8 +396,9 @@ def broadcast_in_channel(client, channel, msg) -> None:
 
     # broadcast message to all clients in the channel
     for c in channel.clients:
-        broadcast_message = f'[Server message ({time.strftime("%H:%M:%S")})] {client.username}: {msg}'
+        broadcast_message = f'[{client.username} ({time.strftime("%H:%M:%S")})] {msg}'
         c.connection.send(broadcast_message.encode())
+
 
 
 def client_handler(client, channel, channels) -> None:
@@ -421,20 +422,22 @@ def client_handler(client, channel, channels) -> None:
                 quit_client(client, channel)
                 break
             elif msg.startswith("/send"):
-                print("In send")
                 send_client(client, channel, msg)
             elif msg.startswith("/list"):
-                print("In list")
                 list_clients(client, channels)
             elif msg.startswith("/whisper"):
                 whisper_client(client, channel, msg)
             elif msg.startswith("/switch"):
-                switch_channel(client, channel, msg, channels)
-                break
+                is_valid = switch_channel(client, channel, msg, channels)
+                if is_valid:
+                    break
+                else:
+                    continue
 
             # if not a command, broadcast message to all clients in the channel
             else:
                 broadcast_in_channel(client, channel, msg)
+                print(f'[{client.username} ({time.strftime("%H:%M:%S")})] {msg}')
 
             # reset remaining time before AFK
             if not client.muted:
@@ -490,13 +493,17 @@ def position_client(channel, conn, username, new_client) -> None:
         channel.clients.append(new_client)
 
         # Print message on both server and client side
-        server_message = (f'️[Server message ({time.strftime("%H:%M:%S")})] '
-                          f'{username} has joined the {channel.name} room.')
+        server_message = (f'[Server message ({time.strftime("%H:%M:%S")})]'
+                          f' {username} has joined the {channel.name} channel.')
+
         print(server_message)
 
-        client_message = (f"{username} has joined the channel.")
+        client_message = (f'[Server message ({time.strftime("%H:%M:%S")})]'
+                          f' {username} has joined the channel.')
+        for client in channel.clients:
+            client.connection.send(client_message.encode())
 
-        broadcast_in_channel(new_client, channel, client_message)
+
     else:
         # Send a server message to the client
         waiting_room_message = (f'[Server message ({time.strftime("%H:%M:%S")})] '
@@ -600,7 +607,7 @@ def process_queue(channel) -> None:
                 channel.clients.append(new_client)
 
                 # Send join message to all clients in the channel
-                join_message = f'{new_client.username} has joined the {channel.name} room.'
+                join_message = f'{new_client.username} has joined the {channel.name} channel.'
                 broadcast_in_channel(new_client, channel, join_message)
 
                 # Update the queue messages for remaining clients in the queue
@@ -873,30 +880,33 @@ def handle_mute_durations(channels) -> None:
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python3 chatserver.py configfile")
-        sys.exit(1)
+    try:
+        if len(sys.argv) != 2:
+            print("Usage: python3 chatserver.py configfile")
+            sys.exit(1)
 
-    config_file = sys.argv[1]
+        config_file = sys.argv[1]
 
-    # parsing and creating channels
-    parsed_lines = parse_config(config_file)
+        # parsing and creating channels
+        parsed_lines = parse_config(config_file)
+        channels = get_channels_dictionary(parsed_lines)
 
-    channels = get_channels_dictionary(parsed_lines)
+        # creating individual threads to handle channels connections
+        for _, channel in channels.items():
+            thread = threading.Thread(target=channel_handler, args=(channel, channels))
+            thread.start()
 
-    # creating individual threads to handle channels connections
-    for _, channel in channels.items():
-        thread = threading.Thread(target=channel_handler, args=(channel, channels))
-        thread.start()
+        server_commands_thread = threading.Thread(target=server_commands, args=(channels,))
+        server_commands_thread.start()
 
-    server_commands_thread = threading.Thread(target=server_commands, args=(channels,))
-    server_commands_thread.start()
+        inactive_clients_thread = threading.Thread(target=check_inactive_clients, args=(channels,))
+        inactive_clients_thread.start()
 
-    inactive_clients_thread = threading.Thread(target=check_inactive_clients, args=(channels,))
-    inactive_clients_thread.start()
-
-    mute_duration_thread = threading.Thread(target=handle_mute_durations, args=(channels,))
-    mute_duration_thread.start()
+        mute_duration_thread = threading.Thread(target=handle_mute_durations, args=(channels,))
+        mute_duration_thread.start()
+    except KeyboardInterrupt:
+        print("Crlt + C Pressed. Exiting...")
+        os._exit(0)
 
 
 if __name__ == "__main__":
