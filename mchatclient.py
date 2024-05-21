@@ -124,9 +124,8 @@ def output_thread(quitEvent, user):
 
         elif "You have successfully quit" in output or "You went AFK" in output or "You are kicked" in output:
             print(output, flush=True)
-            user.soc.close()
+            user.disconnect()
             quitEvent.set()
-
 
         elif is_receiving_file:
             if "You successfully received" not in output:
@@ -135,31 +134,24 @@ def output_thread(quitEvent, user):
                 else:
                     file_data = output
 
-                print("11111", file_data, flush=True)
-                print(type(file_data), flush=True)
             else:
                 is_receiving_file = False
                 with open(file_name, 'wb') as f:
                     if isinstance(file_data, str):
                         file_data = file_data.encode()
                     f.write(file_data)
-                print(f"File {file_name} received and written.", flush=True)
                 file_data = b''
                 file_name = ''
 
         elif "You are receiving" in output:
-            print("Receiving files", flush=True)
-            print(output, flush=True)
             start = output.find("'")
             end = output.find("'", start + 1)
             file_name = output[start + 1:end]
             is_receiving_file = True
 
         elif "You can now switching to" in output:
-            print(output, flush=True)
-            # Simulating that the client knows the port of the new channel
             port = int(output.split()[-1])
-            user.soc.close()
+            user.disconnect()
             user.connect(port)
             user.send(user.get_username())
 
@@ -221,6 +213,7 @@ if __name__ == '__main__':
         try:
             inputThread.start()
             outputThread.start()
+
         except:  # exit if threads can't be created
             sys.exit(1)
 

@@ -1,9 +1,26 @@
 import signal
 import subprocess
+import random
 import time
 import re
-import os
 
+def update_config_file(config_path):
+    with open(config_path, "r") as file:
+        lines = file.readlines()
+
+    updated_ports = []
+    for i, line in enumerate(lines):
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] == "channel":
+            # Replace the port number with a random number between 2000 and 50000
+            parts[2] = str(random.randint(2000, 50000))
+            lines[i] = " ".join(parts) + "\n"
+            updated_ports.append(parts[2])
+
+    with open(config_path, "w") as file:
+        file.writelines(lines)
+    
+    return updated_ports
 
 class PublicTestcasesScenarioTwo:
     def __init__(self,
@@ -12,6 +29,9 @@ class PublicTestcasesScenarioTwo:
                  config_path="configs2.txt",
                  port_number="5555",
                  client_name="Alice"):
+        
+        # Update config file
+        self.port_numbers = update_config_file(config_path)
 
         # Start server
         self.server_process = subprocess.Popen(['python3', server_path, config_path],
@@ -21,7 +41,7 @@ class PublicTestcasesScenarioTwo:
         time.sleep(1)  # Wait for server to start
 
         # Start client
-        self.client_one_in_abc = subprocess.Popen(['python3', client_path, port_number, client_name],
+        self.client_one_in_abc = subprocess.Popen(['python3', client_path, str(self.port_numbers[0]), client_name],
                                                     stdin=subprocess.PIPE,  # Redirect stdin
                                                     stdout=subprocess.PIPE,
                                                     stderr=subprocess.PIPE)
@@ -36,13 +56,13 @@ class PublicTestcasesScenarioTwo:
 
         try:
             # step 1: join another client in abc
-            self.client_two_in_abc = subprocess.Popen(['python3', 'mchatclient.py', '5555', 'Bob'],
+            self.client_two_in_abc = subprocess.Popen(['python3', 'mchatclient.py', str(self.port_numbers[0]), 'Bob'],
                                                         stdin=subprocess.PIPE,  # Redirect stdin
                                                         stdout=subprocess.PIPE,
                                                         stderr=subprocess.PIPE)
             
             # step 2: join a client in def
-            self.client_one_in_def = subprocess.Popen(['python3', 'mchatclient.py', '5566', 'Charlie'],
+            self.client_one_in_def = subprocess.Popen(['python3', 'mchatclient.py', str(self.port_numbers[1]), 'Charlie'],
                                                         stdin=subprocess.PIPE,  # Redirect stdin
                                                         stdout=subprocess.PIPE,
                                                         stderr=subprocess.PIPE)
@@ -146,16 +166,18 @@ class PublicTestcasesScenarioTwo:
     
     def test_list_command(self):
         client_one_in_abc_exop = [
-            r"\[Channel\] abc 5555 Capacity: 2/ 3, Queue: 0.",
-            r"\[Channel\] def 5566 Capacity: 1/ 4, Queue: 0.",
-            r"\[Channel\] xyz 5577 Capacity: 0/ 5, Queue: 0."
+            rf"\[Channel\] abc {self.port_numbers[0]} Capacity: 2/ 3, Queue: 0.",
+            rf"\[Channel\] def {self.port_numbers[1]} Capacity: 1/ 4, Queue: 0.",
+            rf"\[Channel\] xyz {self.port_numbers[2]} Capacity: 0/ 5, Queue: 0."
         ]
 
         try:
             client_one_in_abc_op = self.client_one_in_abc_op.split("\n")
-            assert re.match(client_one_in_abc_exop[0], client_one_in_abc_op[3]), "Client 1 in abc output 3 does not match"
-            assert re.match(client_one_in_abc_exop[1], client_one_in_abc_op[4]), "Client 1 in abc output 4 does not match"
-            assert re.match(client_one_in_abc_exop[2], client_one_in_abc_op[5]), "Client 1 in abc output 5 does not match"
+
+            assert re.fullmatch(client_one_in_abc_exop[0], client_one_in_abc_op[3]), "Client 1 in abc output 3 does not match"
+
+            assert re.fullmatch(client_one_in_abc_exop[1], client_one_in_abc_op[4]), "Client 1 in abc output 4 does not match"
+            assert re.fullmatch(client_one_in_abc_exop[2], client_one_in_abc_op[5]), "Client 1 in abc output 5 does not match"
         
         except Exception as e:
             print(f"{self.RED}List command test failed:{self.RESET}", e)
@@ -172,10 +194,10 @@ class PublicTestcasesScenarioTwo:
 
         try:
             server_op = self.server_outputs.split("\n")
-            assert re.match(server_exop[0], server_op[3]), "Server output 3 does not match"
+            assert re.fullmatch(server_exop[0], server_op[3]), "Server output 3 does not match"
 
             client_two_in_abc_op = self.client_two_in_abc_op.split("\n")
-            assert re.match(client_two_in_abc_exop[0], client_two_in_abc_op[2]), "Client 2 in abc output 2 does not match"
+            assert re.fullmatch(client_two_in_abc_exop[0], client_two_in_abc_op[2]), "Client 2 in abc output 2 does not match"
 
         except Exception as e:
             print(f"{self.RED}Whisper command test failed:{self.RESET}", e)
@@ -200,18 +222,19 @@ class PublicTestcasesScenarioTwo:
 
         try:
             server_op = self.server_outputs.split("\n")
-            assert re.match(server_exop[0], server_op[4]), "Server output 4 does not match"
-            assert re.match(server_exop[1], server_op[5]), "Server output 5 does not match"
+            assert re.fullmatch(server_exop[0], server_op[4]), "Server output 4 does not match"
+            assert re.fullmatch(server_exop[1], server_op[5]), "Server output 5 does not match"
 
             client_one_in_abc_op = self.client_one_in_abc_op.split("\n")
-            assert re.match(client_one_in_abc_exop[0], client_one_in_abc_op[6]), "Client 1 in abc output 6 does not match"
-            assert re.match(client_one_in_abc_exop[1], client_one_in_abc_op[7]), "Client 1 in abc output 7 does not match"
+
+            assert re.fullmatch(client_one_in_abc_exop[0], client_one_in_abc_op[6]), "Client 1 in abc output 6 does not match"
+            assert re.fullmatch(client_one_in_abc_exop[1], client_one_in_abc_op[7]), "Client 1 in abc output 7 does not match"
 
             client_two_in_abc_op = self.client_two_in_abc_op.split("\n")
-            assert re.match(client_two_in_abc_exop[0], client_two_in_abc_op[3]), "Client 2 in abc output 3 does not match"
+            assert re.fullmatch(client_two_in_abc_exop[0], client_two_in_abc_op[3]), "Client 2 in abc output 3 does not match"
 
             client_one_in_def_op = self.client_one_in_def_op.split("\n")
-            assert re.match(client_one_in_def_exop[0], client_one_in_def_op[2]), "Client 1 in def output 3 does not match"
+            assert re.fullmatch(client_one_in_def_exop[0], client_one_in_def_op[2]), "Client 1 in def output 3 does not match"
         
         except Exception as e:
             print(f"{self.RED}Switch command test failed:{self.RESET}", e)
@@ -231,13 +254,13 @@ class PublicTestcasesScenarioTwo:
 
         try:
             server_op = self.server_outputs.split("\n")
-            assert re.match(server_exop[0], server_op[6]), "Server output 6 does not match"
+            assert re.fullmatch(server_exop[0], server_op[6]), "Server output 6 does not match"
 
             client_one_in_abc_op = self.client_one_in_abc_op.split("\n")
-            assert re.match(client_one_in_abc_exop[0], client_one_in_abc_op[8]), "Client 1 in abc output 8 does not match"
+            assert re.fullmatch(client_one_in_abc_exop[0], client_one_in_abc_op[8]), "Client 1 in abc output 8 does not match"
 
             client_one_in_def_op = self.client_one_in_def_op.split("\n")
-            assert re.match(client_one_in_def_exop[0], client_one_in_def_op[3]), "Client 1 in def output 3 does not match"
+            assert re.fullmatch(client_one_in_def_exop[0], client_one_in_def_op[3]), "Client 1 in def output 3 does not match"
 
         except Exception as e:
             print(f"{self.RED}Mute command test failed:{self.RESET}", e)
@@ -251,7 +274,8 @@ class PublicTestcasesScenarioTwo:
 
         try:
             server_op = self.server_outputs.split("\n")
-            assert re.match(server_exop[0], server_op[7]), "Server output 7 does not match"
+
+            assert re.fullmatch(server_exop[0], server_op[7]), "Server output 7 does not match"
 
         except Exception as e:
             print(f"{self.RED}Empty command test failed:{self.RESET}", e)

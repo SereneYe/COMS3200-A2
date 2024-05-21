@@ -1,8 +1,29 @@
-import signal
-import subprocess
-import time
 import re
 import os
+import time
+import signal
+import tempfile
+import subprocess
+
+import random
+
+def update_config_file(config_path):
+    with open(config_path, "r") as file:
+        lines = file.readlines()
+
+    updated_ports = []
+    for i, line in enumerate(lines):
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] == "channel":
+            # Replace the port number with a random number between 2000 and 50000
+            parts[2] = str(random.randint(2000, 50000))
+            lines[i] = " ".join(parts) + "\n"
+            updated_ports.append(parts[2])
+
+    with open(config_path, "w") as file:
+        file.writelines(lines)
+    
+    return updated_ports
 
 
 class PublicTestcasesScenarioOne:
@@ -10,8 +31,10 @@ class PublicTestcasesScenarioOne:
                  server_path="mchatserver.py",
                  client_path="mchatclient.py",
                  config_path="configs1.txt",
-                 port_number="3399",
                  client_name="Alice"):
+        # randomise the port number in the config file
+        updated_ports = update_config_file(config_path)
+        self.port_number = str(updated_ports[0])
 
         # Start server
         self.server_process = subprocess.Popen(['python3', server_path, config_path],
@@ -21,7 +44,7 @@ class PublicTestcasesScenarioOne:
         time.sleep(1)  # Wait for server to start
 
         # Start client
-        self.client_process_one = subprocess.Popen(['python3', client_path, port_number, client_name],
+        self.client_process_one = subprocess.Popen(['python3', client_path, self.port_number, client_name],
                                                 stdin=subprocess.PIPE,  # Redirect stdin
                                                 stdout=subprocess.PIPE,
                                                 stderr=subprocess.PIPE)
@@ -42,7 +65,7 @@ class PublicTestcasesScenarioOne:
             time.sleep(0.5)
 
             # step 2: join another client
-            self.client_process_two = subprocess.Popen(['python3', 'mchatclient.py', '3388', 'Bob'],
+            self.client_process_two = subprocess.Popen(['python3', 'mchatclient.py', self.port_number, 'Bob'],
                                                         stdin=subprocess.PIPE,  # Redirect stdin
                                                         stdout=subprocess.PIPE,
                                                         stderr=subprocess.PIPE)
@@ -56,7 +79,7 @@ class PublicTestcasesScenarioOne:
             time.sleep(0.5)
 
             # step 4: join another client
-            self.client_process_three = subprocess.Popen(['python3', 'mchatclient.py', '3388', 'Charlie'],
+            self.client_process_three = subprocess.Popen(['python3', 'mchatclient.py', self.port_number, 'Charlie'],
                                                         stdin=subprocess.PIPE,  # Redirect stdin
                                                         stdout=subprocess.PIPE,
                                                         stderr=subprocess.PIPE)
@@ -124,7 +147,7 @@ class PublicTestcasesScenarioOne:
             # print("Client outputs:")
             # print("client_one_outputs:\n" + self.client_one_outputs)
             # print("client_two_outputs:\n" + self.client_two_outputs)
-            print("client_three_outputs:\n" + self.client_three_outputs)
+            # print("client_three_outputs:\n" + self.client_three_outputs)
             
             # print("Client errors:")
             # print("client_one_error:\n" + self.client_one_error.decode())
@@ -140,23 +163,20 @@ class PublicTestcasesScenarioOne:
             r"\[Alice \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
         client_one_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Alice",
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Alice has joined the channel",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Alice.",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Alice has joined the channel.",
             r"\[Alice \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
 
         try:
             server_outputs = self.server_outputs.split("\n")
-
-            assert re.match(server_expected_output[0], server_outputs[0]), "Server output 0 does not match"
-            assert re.match(server_expected_output[1], server_outputs[1]), "Server output 1 does not match"
+            assert re.fullmatch(server_expected_output[0], server_outputs[0]), "Server output 0 does not match"
+            assert re.fullmatch(server_expected_output[1], server_outputs[1]), "Server output 1 does not match"
 
             client_one_outputs = self.client_one_outputs.split("\n")
-            assert re.match(client_one_expected_output[0], client_one_outputs[0]), "Client 1 output 0 does not match"
-            print(client_one_expected_output[1], client_one_outputs[1])
-            assert re.match(client_one_expected_output[1], client_one_outputs[1]), "Client 1 output 1 does not match"
-            print(client_one_expected_output[2], client_one_outputs[2])
-            assert re.match(client_one_expected_output[2], client_one_outputs[2]), "Client 1 output 2 does not match"
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[0]), "Client 1 output 0 does not match"
+            assert re.fullmatch(client_one_expected_output[1], client_one_outputs[1]), "Client 1 output 1 does not match"
+            assert re.fullmatch(client_one_expected_output[2], client_one_outputs[2]), "Client 1 output 2 does not match"
         
         except Exception as e:
             print(f"{self.RED}First client joins test failed:{self.RESET}", e)
@@ -168,23 +188,23 @@ class PublicTestcasesScenarioOne:
             r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Bob has joined the abc channel."
         ]
         client_one_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Bob has joined the channel",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Bob has joined the channel.",
         ]
         client_two_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Bob",
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Bob has joined the channel"
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Bob.",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Bob has joined the channel."
         ]
 
         try:
             server_outputs = self.server_outputs.split("\n")
-            assert re.match(server_expected_output[0], server_outputs[2]), "Server output 2 does not match"
+            assert re.fullmatch(server_expected_output[0], server_outputs[2]), "Server output 2 does not match"
 
             client_one_outputs = self.client_one_outputs.split("\n")
-            assert re.match(client_one_expected_output[0], client_one_outputs[3]), "Client 1 output 3 does not match"
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[3]), "Client 1 output 3 does not match"
 
             client_two_outputs = self.client_two_outputs.split("\n")
-            assert re.match(client_two_expected_output[0], client_two_outputs[0]), "Client 2 output 0 does not match"
-            assert re.match(client_two_expected_output[1], client_two_outputs[1]), "Client 2 output 1 does not match"
+            assert re.fullmatch(client_two_expected_output[0], client_two_outputs[0]), "Client 2 output 0 does not match"
+            assert re.fullmatch(client_two_expected_output[1], client_two_outputs[1]), "Client 2 output 1 does not match"
         
         except Exception as e:
             print(f"{self.RED}Second client joins test failed:{self.RESET}", e)
@@ -193,20 +213,19 @@ class PublicTestcasesScenarioOne:
     
     def test_file_transfer(self):
         server_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Alice sent configs1.txt to Bob",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Alice sent configs1.txt to Bob.",
         ]
         client_one_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] You sent configs1.txt to Bob"
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] You sent configs1.txt to Bob."
         ]
         modified_time = os.path.getmtime("configs1.txt")
 
         try:
             server_outputs = self.server_outputs.split("\n")
-            assert re.match(server_expected_output[0], server_outputs[3]), "Server output 3 does not match"
+            assert re.fullmatch(server_expected_output[0], server_outputs[3]), "Server output 3 does not match"
 
             client_one_outputs = self.client_one_outputs.split("\n")
-
-            assert re.match(client_one_expected_output[0], client_one_outputs[4]), "Client 1 output 4 does not match"
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[4]), "Client 1 output 4 does not match"
 
             assert modified_time != self.creation_time, "File is not modified"
 
@@ -221,37 +240,37 @@ class PublicTestcasesScenarioOne:
             r"\[Charlie \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
         client_one_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel.",
             r"\[Charlie \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
         client_two_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel.",
             r"\[Charlie \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
         client_three_expected_output = [
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Charlie",
-            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Welcome to the abc channel, Charlie.",
+            r"\[Server message \((\d{2}:\d{2}:\d{2})\)\] Charlie has joined the channel.",
             r"\[Charlie \((\d{2}:\d{2}:\d{2})\)\] Hi"
         ]
 
         try:
             server_outputs = self.server_outputs.split("\n")
-            assert re.match(server_expected_output[0], server_outputs[4]), "Server output 4 does not match"
-            assert re.match(server_expected_output[1], server_outputs[5]), "Server output 5 does not match"
+            assert re.fullmatch(server_expected_output[0], server_outputs[4]), "Server output 4 does not match"
+            assert re.fullmatch(server_expected_output[1], server_outputs[5]), "Server output 5 does not match"
 
             client_one_outputs = self.client_one_outputs.split("\n")
-            print(client_one_expected_output[0], client_one_outputs[5])
-            assert re.match(client_one_expected_output[0], client_one_outputs[5]), "Client 1 output 5 does not match"
-            assert re.match(client_one_expected_output[1], client_one_outputs[6]), "Client 1 output 6 does not match"
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[5]), "Client 1 output 5 does not match"
+            assert re.fullmatch(client_one_expected_output[1], client_one_outputs[6]), "Client 1 output 6 does not match"
 
             client_two_outputs = self.client_two_outputs.split("\n")
-            assert re.match(client_two_expected_output[0], client_two_outputs[2]), "Client 2 output 2 does not match"
-            assert re.match(client_two_expected_output[1], client_two_outputs[3]), "Client 2 output 3 does not match"
+
+            assert re.fullmatch(client_two_expected_output[0], client_two_outputs[2]), "Client 2 output 2 does not match"
+            assert re.fullmatch(client_two_expected_output[1], client_two_outputs[3]), "Client 2 output 3 does not match"
 
             client_three_outputs = self.client_three_outputs.split("\n")
-            assert re.match(client_three_expected_output[0], client_three_outputs[0]), "Client 3 output 0 does not match"
-            assert re.match(client_three_expected_output[1], client_three_outputs[1]), "Client 3 output 1 does not match"
-            assert re.match(client_three_expected_output[2], client_three_outputs[2]), "Client 3 output 2 does not match"
+            assert re.fullmatch(client_three_expected_output[0], client_three_outputs[0]), "Client 3 output 0 does not match"
+            assert re.fullmatch(client_three_expected_output[1], client_three_outputs[1]), "Client 3 output 1 does not match"
+            assert re.fullmatch(client_three_expected_output[2], client_three_outputs[2]), "Client 3 output 2 does not match"
 
         except Exception as e:
             print(f"{self.RED}Third client joins test failed:{self.RESET}", e)
@@ -271,13 +290,14 @@ class PublicTestcasesScenarioOne:
 
         try:
             server_outputs = self.server_outputs.split("\n")
-            assert re.match(server_expected_output[0], server_outputs[6]), "Server output 6 does not match"
+            assert re.fullmatch(server_expected_output[0], server_outputs[6]), "Server output 6 does not match"
 
             client_one_outputs = self.client_one_outputs.split("\n")
-            assert re.match(client_one_expected_output[0], client_one_outputs[7]), "Client 1 output 7 does not match"
+
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[7]), "Client 1 output 7 does not match"
 
             client_two_outputs = self.client_two_outputs.split("\n")
-            assert re.match(client_two_expected_output[0], client_two_outputs[4]), "Client 2 output 4 does not match"
+            assert re.fullmatch(client_two_expected_output[0], client_two_outputs[4]), "Client 2 output 4 does not match"
         
         except Exception as e:
             print(f"{self.RED}Kick command test failed:{self.RESET}", e)
@@ -291,7 +311,7 @@ class PublicTestcasesScenarioOne:
 
         try:
             client_one_outputs = self.client_one_outputs.split("\n")
-            assert re.match(client_one_expected_output[0], client_one_outputs[8]), "Client 1 output 8 does not match"
+            assert re.fullmatch(client_one_expected_output[0], client_one_outputs[8]), "Client 1 output 8 does not match"
         
         except Exception as e:
             print(f"{self.RED}Quit command test failed:{self.RESET}", e)
